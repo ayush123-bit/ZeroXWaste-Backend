@@ -36,13 +36,13 @@ const googleLogin = async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    // Set HTTP-only cookie
-    res.cookie('ZeroXtoken', jwtToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 3600000 // 1 hour
-    });
+   res.cookie('ZeroXtoken', jwtToken, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'None',
+  maxAge: 3600000
+});
+
 
     res.status(200).json({
       message: 'Login successful',
