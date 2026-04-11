@@ -7,18 +7,14 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const googleLogin = async (req, res) => {
   const { token } = req.body;
-
   try {
     const ticket = await client.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-
     const payload = ticket.getPayload();
 
-    // Check if user exists or create
     let user = await User.findOne({ googleId: payload.sub });
-
     if (!user) {
       user = new User({
         googleId: payload.sub,
@@ -29,20 +25,18 @@ const googleLogin = async (req, res) => {
       await user.save();
     }
 
-    // Create JWT token
-    const jwtToken = jwt.sign(
-      { userId: user._id, email: user.email },
+   const jwtToken = jwt.sign(
+  { userId: user._id.toString(), email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-   res.cookie('ZeroXtoken', jwtToken, {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'None',
-  maxAge: 3600000
-});
-
+    res.cookie('ZeroXtoken', jwtToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      maxAge: 3600000
+    });
 
     res.status(200).json({
       message: 'Login successful',
@@ -50,11 +44,11 @@ const googleLogin = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
-        picture: user.picture
+        picture: user.picture,
+        role: user.role  // ✅ role added
       },
-      token: jwtToken // Also send token in response (optional)
+      token: jwtToken
     });
-
   } catch (error) {
     console.error("Google Login Failed:", error.message);
     res.status(401).json({ message: 'Invalid token' });
@@ -63,16 +57,14 @@ const googleLogin = async (req, res) => {
 
 const checkAuth = (req, res) => {
   const token = req.cookies?.ZeroXtoken;
-  
   if (!token) {
     return res.status(401).json({ isAuthenticated: false });
   }
-
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return res.status(200).json({
       isAuthenticated: true,
-      user: decoded,
+      user: decoded, // ✅ this already contains role since we added it to JWT
     });
   } catch (err) {
     console.error("JWT verification failed:", err.message);
