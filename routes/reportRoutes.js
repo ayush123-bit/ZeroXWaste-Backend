@@ -8,7 +8,7 @@ const {
   assignWorker, deleteReport, getReportStats,
 } = require('../controllers/reportController');
 
-router.post('/',              reportSubmitLimiter, upload.array('images', 10), createReport);
+router.post('/',              upload.array('images', 10), createReport);
 router.get('/',               apiLimiter, getAllReports);
 router.get('/stats',          apiLimiter, getReportStats);
 router.get('/heatmap',        apiLimiter, getHeatmapData);
