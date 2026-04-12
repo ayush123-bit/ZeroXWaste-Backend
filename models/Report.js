@@ -11,8 +11,8 @@ const reportSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Category is required'],
-      enum: ['plastic', 'organic', 'electronic', 'other'],
-      lowercase: true,
+    enum: ['plastic', 'organic', 'electronic', 'paper', 'metal', 'glass', 'batteries', 'lightbulbs', 'chemical', 'medical', 'textiles', 'furniture', 'garden', 'oil', 'construction', 'other'],
+    lowercase: true,
     },
     location: {
       type: { type: String, enum: ['Point'], default: 'Point' },

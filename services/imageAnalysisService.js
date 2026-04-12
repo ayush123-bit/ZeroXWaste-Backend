@@ -6,19 +6,32 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const fetchImageAsBase64 = async (imageUrl) => {
   const response = await axios.get(imageUrl, {
     responseType: 'arraybuffer',
-    timeout: 15000,
+    timeout: 12000,
   });
   const base64 = Buffer.from(response.data).toString('base64');
   const contentType = response.headers['content-type'] || 'image/jpeg';
   return { base64, mediaType: contentType };
 };
 
-const getImageResourceScore = async (imageUrl) => {
-  try {
-    if (!imageUrl) {
-      return { score: 30, materials: [], reasoning: 'No image provided' };
-    }
+// Fallback scoring when vision model unavailable — uses category heuristic
+const getCategoryFallbackScore = (category) => {
+  const scores = {
+    electronic: 80, batteries: 85, chemical: 90, medical: 88,
+    metal: 70, plastic: 60, glass: 55, construction: 50,
+    organic: 35, garden: 30, textiles: 40, furniture: 45,
+    paper: 40, oil: 65, other: 40,
+  };
+  return scores[category?.toLowerCase()] || 40;
+};
 
+const getImageResourceScore = async (imageUrl, category = 'other') => {
+  // If no image URL, use category-based fallback immediately
+  if (!imageUrl) {
+    const score = getCategoryFallbackScore(category);
+    return { score, materials: [category], reasoning: 'No image — category-based score' };
+  }
+
+  try {
     const { base64, mediaType } = await fetchImageAsBase64(imageUrl);
 
     const completion = await groq.chat.completions.create({
@@ -33,28 +46,16 @@ const getImageResourceScore = async (imageUrl) => {
             },
             {
               type: 'text',
-              text: `Analyze this waste image. Return ONLY a JSON object, no markdown:
-{
-  "resourceScore": <number 0-100>,
-  "detectedMaterials": ["material1", "material2"],
-  "reasoning": "<max 15 words>"
-}
+              text: `Analyze this waste image. Return ONLY valid JSON, no markdown, no explanation:
+{"resourceScore":<0-100>,"detectedMaterials":["material1"],"reasoning":"<15 words max>"}
 
-Score guide:
-- E-waste (phones, batteries, electronics): 85-100
-- Metal (cans, pipes, scrap metal): 70-85
-- Plastic (bottles, bags, containers): 55-70
-- Mixed recyclables: 50-65
-- Organic waste (food, leaves): 30-45
-- Construction debris: 35-50
-- General/unidentifiable waste: 25-35
-- Minor/tiny waste: 10-25`,
+Score: E-waste/batteries=85-100, Metal=70-85, Plastic=55-70, Mixed=50-65, Organic=30-45, General=25-35`,
             },
           ],
         },
       ],
-      temperature: 0.2,
-      max_tokens: 200,
+      temperature: 0.1,
+      max_tokens: 150,
     });
 
     const raw = completion.choices[0]?.message?.content?.trim() || '';
@@ -62,13 +63,14 @@ Score guide:
     const result = JSON.parse(cleaned);
 
     return {
-      score: Math.min(100, Math.max(0, Number(result.resourceScore) || 30)),
-      materials: Array.isArray(result.detectedMaterials) ? result.detectedMaterials : [],
+      score: Math.min(100, Math.max(0, Number(result.resourceScore) || getCategoryFallbackScore(category))),
+      materials: Array.isArray(result.detectedMaterials) ? result.detectedMaterials : [category],
       reasoning: result.reasoning || '',
     };
   } catch (error) {
-    console.error('[ImageAnalysisService] Failed:', error.message);
-    return { score: 40, materials: [], reasoning: 'Vision analysis unavailable' };
+    console.error('[ImageAnalysis] Vision failed, using category fallback:', error.message);
+    const score = getCategoryFallbackScore(category);
+    return { score, materials: [category], reasoning: `Category fallback (${category})` };
   }
 };
 
