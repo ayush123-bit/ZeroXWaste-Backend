@@ -38,7 +38,7 @@ const recalculatePriority = async (req, res) => {
         wasteClassification: classificationResult.data,
         recommendations:     recommendationResult.data,
       },
-      { new: true }
+      { new: true , runValidators: false}
     );
 
     // Notify reporter that their report has been analyzed

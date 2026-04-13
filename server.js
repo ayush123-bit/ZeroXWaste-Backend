@@ -23,6 +23,7 @@ app.use('/api', require('./routes/authRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/gamification', require('./routes/gamificationRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/workers', require('./routes/workerRoutes'));
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));

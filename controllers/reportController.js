@@ -47,13 +47,13 @@ const createReport = async (req, res) => {
           classifyWaste(uploadedImages[0]?.url, category, description),
           getRecommendations({ category, priorityLevel: null, address: address || '', wasteType: null, latitude: parseFloat(latitude), longitude: parseFloat(longitude) }),
         ]);
-        await Report.findByIdAndUpdate(report._id, {
-          priorityScore: priorityResult.priorityScore,
-          priorityLevel: priorityResult.priorityLevel,
-          priorityBreakdown: priorityResult.breakdown,
-          wasteClassification: classificationResult.data,
-          recommendations: recommendationResult.data,
-        });
+      await Report.findByIdAndUpdate(report._id, {
+  priorityScore: priorityResult.priorityScore,
+  priorityLevel: priorityResult.priorityLevel,
+  priorityBreakdown: priorityResult.breakdown,
+  wasteClassification: classificationResult.data,
+  recommendations: recommendationResult.data,
+}, { runValidators: false }); // ← add this
         if (user?.userId) {
           await awardPoints(user.userId, 'SUBMIT_REPORT');
           if (priorityResult.priorityLevel === 'High') await awardPoints(user.userId, 'HIGH_PRIORITY_REPORT');
@@ -62,7 +62,7 @@ const createReport = async (req, res) => {
           broadcast({ type: 'NEW_HIGH_PRIORITY', title: 'New High Priority Report', message: `${category} waste reported near ${address || 'unknown location'}`, reportId: report._id, score: priorityResult.priorityScore });
         }
         invalidatePattern('stats:');
-        logger.info('Background processing complete', { reportId: report._id, priority: priorityResult.priorityLevel });
+       logger.info('Background processing complete', { reportId: report._id, priority: priorityResult.priorityLevel, score: priorityResult.priorityScore, breakdown: priorityResult.breakdown });
       } catch (err) {
         logger.error('Background processing failed', { reportId: report._id, error: err.message });
       }
@@ -186,7 +186,18 @@ const updateReportStatus = async (req, res) => {
     const report = await Report.findByIdAndUpdate(req.params.id, { status }, { new: true });
     if (!report) return res.status(404).json({ status: 'error', message: 'Report not found' });
     const { sendToUser } = require('../services/notificationService');
-    if (report.userId) sendToUser(report.userId, { type: 'STATUS_UPDATE', title: 'Your report was updated', message: `Report status changed to: ${status}`, reportId: report._id, newStatus: status });
+    if (report.userId) {
+  console.log(`[Notification] Sending status update to userId: ${report.userId}`);
+  sendToUser(report.userId, {
+    type: 'STATUS_UPDATE',
+    title: 'Your report was updated',
+    message: `Report status changed to: ${status}`,
+    reportId: report._id,
+    newStatus: status,
+  });
+} else {
+  console.log('[Notification] No userId on report — cannot notify');
+}
     if (status === 'resolved' && report.userId) await awardPoints(report.userId, 'REPORT_RESOLVED');
     invalidatePattern('stats:');
     return res.status(200).json({ status: 'success', message: 'Status updated', data: report });
