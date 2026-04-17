@@ -183,21 +183,83 @@ const updateReportStatus = async (req, res) => {
     const { status } = req.body;
     const valid = ['pending', 'in-progress', 'resolved', 'rejected'];
     if (!status || !valid.includes(status)) return res.status(400).json({ status: 'error', message: `Status must be one of: ${valid.join(', ')}` });
-    const report = await Report.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    
+    const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ status: 'error', message: 'Report not found' });
+    
+    // Update status
+    report.status = status;
+    
+    // Clear mapping of status to progress stages
+    if (report.progressStages && report.progressStages.length > 0) {
+      switch(status) {
+        case 'pending':
+          // Stage 1 complete only
+          report.progressStages[0].completed = true;
+          report.progressStages[0].completedAt = report.progressStages[0].completedAt || new Date();
+          report.progressStages[1].completed = false;
+          report.progressStages[2].completed = false;
+          report.progressStages[3].completed = false;
+          report.progressStages[4].completed = false;
+          report.progressStages[5].completed = false;
+          report.currentStage = 'Report Submitted';
+          report.progressPercentage = 17;
+          break;
+          
+        case 'in-progress':
+          // Stages 1-3 complete (Submitted, Review, Assigned)
+          report.progressStages[0].completed = true;
+          report.progressStages[0].completedAt = report.progressStages[0].completedAt || new Date();
+          report.progressStages[1].completed = true;
+          report.progressStages[1].completedAt = report.progressStages[1].completedAt || new Date();
+          report.progressStages[2].completed = true;
+          report.progressStages[2].completedAt = report.progressStages[2].completedAt || new Date();
+          report.progressStages[3].completed = false;
+          report.progressStages[4].completed = false;
+          report.progressStages[5].completed = false;
+          report.currentStage = 'Work in Progress';
+          report.progressPercentage = 50;
+          
+          if (!report.estimatedCompletionDate) {
+            const estDate = new Date();
+            estDate.setDate(estDate.getDate() + 7);
+            report.estimatedCompletionDate = estDate;
+          }
+          break;
+          
+        case 'resolved':
+          // All stages complete
+          report.progressStages.forEach((stage, idx) => {
+            stage.completed = true;
+            if (!stage.completedAt) stage.completedAt = new Date();
+          });
+          report.currentStage = 'Resolved';
+          report.progressPercentage = 100;
+          break;
+          
+        case 'rejected':
+          // Keep current progress but mark as rejected
+          report.currentStage = 'Rejected';
+          // Don't change progress percentage
+          break;
+      }
+    }
+    
+    await report.save();
+    
     const { sendToUser } = require('../services/notificationService');
     if (report.userId) {
-  console.log(`[Notification] Sending status update to userId: ${report.userId}`);
-  sendToUser(report.userId, {
-    type: 'STATUS_UPDATE',
-    title: 'Your report was updated',
-    message: `Report status changed to: ${status}`,
-    reportId: report._id,
-    newStatus: status,
-  });
-} else {
-  console.log('[Notification] No userId on report — cannot notify');
-}
+      sendToUser(report.userId, {
+        type: 'STATUS_UPDATE',
+        title: 'Report Progress Update',
+        message: `Your report is now: ${report.currentStage} (${report.progressPercentage}% complete)`,
+        reportId: report._id,
+        newStatus: status,
+        progressPercentage: report.progressPercentage,
+        currentStage: report.currentStage
+      });
+    }
+    
     if (status === 'resolved' && report.userId) await awardPoints(report.userId, 'REPORT_RESOLVED');
     invalidatePattern('stats:');
     return res.status(200).json({ status: 'success', message: 'Status updated', data: report });
@@ -209,11 +271,48 @@ const updateReportStatus = async (req, res) => {
 const assignWorker = async (req, res) => {
   try {
     const { workerId, workerName } = req.body;
-    const report = await Report.findByIdAndUpdate(req.params.id, { assignedWorker: { workerId, workerName, assignedAt: new Date() }, status: 'in-progress' }, { new: true });
+    const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ status: 'error', message: 'Report not found' });
+    
+    // Assign worker
+    report.assignedWorker = { workerId, workerName, assignedAt: new Date() };
+    report.status = 'in-progress';
+    
+    // Update progress stages for worker assignment (Stage 3: Worker Assigned)
+    if (report.progressStages && report.progressStages.length > 0) {
+      // Ensure first 3 stages are completed
+      report.progressStages[0].completed = true;
+      report.progressStages[0].completedAt = report.progressStages[0].completedAt || new Date();
+      report.progressStages[1].completed = true;
+      report.progressStages[1].completedAt = report.progressStages[1].completedAt || new Date();
+      report.progressStages[2].completed = true;
+      report.progressStages[2].completedAt = new Date();
+      
+      report.progressPercentage = 50;
+      report.currentStage = 'Work in Progress';
+      
+      // Set estimated completion date
+      if (!report.estimatedCompletionDate) {
+        const estDate = new Date();
+        estDate.setDate(estDate.getDate() + 7);
+        report.estimatedCompletionDate = estDate;
+      }
+    }
+    
+    await report.save();
+    
     const { sendToUser } = require('../services/notificationService');
     sendToUser(workerId, { type: 'TASK_ASSIGNED', title: 'New task assigned', message: 'You have a new waste pickup task', reportId: report._id });
-    if (report.userId) sendToUser(report.userId, { type: 'STATUS_UPDATE', title: 'Worker assigned', message: 'A worker has been assigned to your complaint', reportId: report._id });
+    if (report.userId) {
+      sendToUser(report.userId, { 
+        type: 'STATUS_UPDATE', 
+        title: 'Worker Assigned', 
+        message: `A worker has been assigned to your complaint. Progress: 50% - Stage: Worker Assigned`, 
+        reportId: report._id,
+        progressPercentage: 50 
+      });
+    }
+    
     return res.status(200).json({ status: 'success', data: report });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: 'Error assigning worker' });
@@ -233,4 +332,52 @@ const deleteReport = async (req, res) => {
   }
 };
 
-module.exports = { createReport, getAllReports, getMyReports, getReportById, getNearbyReports, getHeatmapData, updateReportStatus, assignWorker, deleteReport, getReportStats };
+const updateReportProgress = async (req, res) => {
+  try {
+    const { stageName } = req.body;
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ status: 'error', message: 'Report not found' });
+    
+    const stageIndex = report.progressStages.findIndex(s => s.name === stageName);
+    if (stageIndex === -1) {
+      return res.status(400).json({ status: 'error', message: 'Invalid stage name' });
+    }
+    
+    report.progressStages[stageIndex].completed = true;
+    report.progressStages[stageIndex].completedAt = new Date();
+    report.currentStage = stageName;
+    
+    const completedCount = report.progressStages.filter(s => s.completed).length;
+    report.progressPercentage = Math.floor((completedCount / report.progressStages.length) * 100);
+    
+    // Auto-update main status
+    if (stageName === 'Resolved') report.status = 'resolved';
+    else if (stageName === 'Worker Assigned') report.status = 'in-progress';
+    else if (report.status === 'pending') report.status = 'in-progress';
+    
+    await report.save();
+    
+    // Notify user
+    const { sendToUser } = require('../services/notificationService');
+    if (report.userId) {
+      sendToUser(report.userId, {
+        type: 'PROGRESS_UPDATE',
+        title: 'Report Progress Update',
+        message: `Stage completed: ${stageName}. Overall progress: ${report.progressPercentage}%`,
+        reportId: report._id,
+        progressPercentage: report.progressPercentage,
+        currentStage: stageName
+      });
+    }
+    
+    return res.status(200).json({ status: 'success', data: report });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: 'Error updating progress' });
+  }
+};
+
+// Don't forget to export this new function
+// Update module.exports to include updateReportProgress
+module.exports = { createReport, getAllReports, getMyReports, getReportById, getNearbyReports, getHeatmapData, updateReportStatus, updateReportProgress, assignWorker, deleteReport, getReportStats };
+
+module.exports = { createReport, getAllReports, getMyReports, getReportById, getNearbyReports, getHeatmapData, updateReportStatus, assignWorker, deleteReport, getReportStats, updateReportProgress };

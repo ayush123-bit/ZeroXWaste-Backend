@@ -25,11 +25,33 @@ const reportSchema = new mongoose.Schema(
         publicId: { type: String, required: true },
       },
     ],
-    status: {
-      type: String,
-      enum: ['pending', 'in-progress', 'resolved', 'rejected'],
-      default: 'pending',
-    },
+   status: {
+  type: String,
+  enum: ['pending', 'in-progress', 'resolved', 'rejected'],
+  default: 'pending',
+},
+// Add these new fields after status
+progressStages: {
+  type: [{
+    name: { type: String, required: true },
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
+    description: { type: String, default: '' }
+  }],
+  default: function() {
+    return [
+      { name: 'Report Submitted', completed: true, description: 'Your complaint has been registered and is pending review' },
+      { name: 'Initial Review', completed: false, description: 'Authorities are reviewing your complaint' },
+      { name: 'Worker Assigned', completed: false, description: 'A worker has been assigned to handle this' },
+      { name: 'Work in Progress', completed: false, description: 'Cleanup work is ongoing at the location' },
+      { name: 'Quality Check', completed: false, description: 'Final verification and quality assurance in progress' },
+      { name: 'Resolved', completed: false, description: 'Complaint has been resolved and closed' }
+    ];
+  }
+},
+progressPercentage: { type: Number, default: 0, min: 0, max: 100 },
+currentStage: { type: String, default: 'Report Submitted' },
+estimatedCompletionDate: { type: Date, default: null },
     reportedBy: { type: String, default: 'Anonymous' },
 
     // User association
@@ -83,12 +105,25 @@ const reportSchema = new mongoose.Schema(
     clusterSize:    { type: Number, default: 1 },
     clusterBoosted: { type: Boolean, default: false },
 
-    // NEW: Worker assignment
-    assignedWorker: {
+ assignedWorker: {
       workerId:   { type: String, default: null },
       workerName: { type: String, default: null },
       assignedAt: { type: Date, default: null },
     },
+
+    // Worker proof of completion
+    completionProof: {
+      imageUrl:    { type: String, default: null },
+      publicId:    { type: String, default: null },
+      uploadedAt:  { type: Date, default: null },
+      workerLat:   { type: Number, default: null },
+      workerLng:   { type: Number, default: null },
+      locationVerified: { type: Boolean, default: false },
+      distanceMeters:   { type: Number, default: null },
+    },
+
+    // Resolution notification tracking
+    resolutionNotified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

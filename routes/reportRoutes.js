@@ -5,7 +5,7 @@ const { reportSubmitLimiter, apiLimiter } = require('../middlewares/rateLimiter'
 const {
   createReport, getAllReports, getMyReports, getReportById,
   getNearbyReports, getHeatmapData, updateReportStatus,
-  assignWorker, deleteReport, getReportStats,
+  assignWorker, deleteReport, getReportStats, updateReportProgress
 } = require('../controllers/reportController');
 const { recalculatePriority } = require('../controllers/adminController');
 
@@ -20,5 +20,9 @@ router.patch('/:id/status',    updateReportStatus);
 router.patch('/:id/assign',    assignWorker);
 router.post('/:id/recalculate', recalculatePriority);
 router.delete('/:id',          deleteReport);
+
+router.patch('/:id/progress', updateReportProgress);
+
+
 
 module.exports = router;

@@ -8,11 +8,24 @@ const userSchema = new mongoose.Schema(
     picture:  { type: String },
 
     // Role system
-    role: {
-      type: String,
-      enum: ['user', 'worker', 'admin'],
-      default: 'user',
-    },
+   role: {
+  type: String,
+  enum: ['user', 'worker', 'admin', 'super_admin', 'category_head', 'area_head'],
+  default: 'user',
+},
+
+// Extended admin profile (only for category_head and area_head)
+adminProfile: {
+  category: { type: String, default: null }, // for category_head: 'waste_collection', 'recycling', 'hazardous', 'public_cleanliness', 'campaigns'
+  area:      { type: String, default: null }, // for area_head: specific zone name
+  permissions: {
+    canAssignWorkers:   { type: Boolean, default: false },
+    canChangeStatus:    { type: Boolean, default: false },
+    canCreateCampaigns: { type: Boolean, default: false },
+    canViewReports:     { type: Boolean, default: true },
+    canDeleteReports:   { type: Boolean, default: false },
+  },
+},
 
     // Worker fields (only relevant when role === 'worker')
     workerProfile: {
