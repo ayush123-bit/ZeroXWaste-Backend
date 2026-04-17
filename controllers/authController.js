@@ -101,4 +101,34 @@ const logout = (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
-module.exports = { googleLogin, checkAuth, logout };
+
+const devLogin = async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ message: 'Not allowed in production' });
+  }
+
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  const jwtToken = jwt.sign(
+    { userId: user._id.toString(), email: user.email, name: user.name, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  res.cookie('ZeroXtoken', jwtToken, {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'Lax',
+    maxAge: 7 * 24 * 3600000,
+  });
+
+  res.status(200).json({
+    message: 'Dev login successful',
+    user: { _id: user._id, name: user.name, email: user.email, picture: user.picture, role: user.role },
+  });
+};
+
+module.exports = { googleLogin, checkAuth, logout, devLogin };
