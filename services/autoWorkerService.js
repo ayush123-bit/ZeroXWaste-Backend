@@ -63,30 +63,41 @@ const autoAssignWorker = async (report) => {
     // If no area match, just pick first available worker
     if (!bestWorker) bestWorker = availableWorkers[0];
 
-    // Assign the worker to the report
-    report.assignedWorker = {
-      workerId:   bestWorker._id.toString(),
-      workerName: bestWorker.name,
-      assignedAt: new Date(),
+   // CRITICAL: Use findByIdAndUpdate NOT report.save()
+    // report.save() would overwrite priority fields that were just calculated
+    const updatePayload = {
+      assignedWorker: {
+        workerId:   bestWorker._id.toString(),
+        workerName: bestWorker.name,
+        assignedAt: new Date(),
+      },
+      status: 'in-progress',
+      progressPercentage: 50,
+      currentStage: 'Work in Progress',
     };
-    report.status = 'in-progress';
 
-    // Update progress stages
-    if (report.progressStages && report.progressStages.length > 0) {
-      report.progressStages[0].completed = true;
-      report.progressStages[0].completedAt = report.progressStages[0].completedAt || new Date();
-      report.progressStages[1].completed = true;
-      report.progressStages[1].completedAt = new Date();
-      report.progressStages[2].completed = true;
-      report.progressStages[2].completedAt = new Date();
-      report.progressPercentage = 50;
-      report.currentStage = 'Work in Progress';
+    // Only set estimatedCompletionDate if not already set
+    if (!report.estimatedCompletionDate) {
       const estDate = new Date();
       estDate.setDate(estDate.getDate() + 7);
-      report.estimatedCompletionDate = estDate;
+      updatePayload.estimatedCompletionDate = estDate;
     }
 
-    await report.save();
+    // Update progress stages via $set on specific array indices
+    if (report.progressStages && report.progressStages.length >= 3) {
+      updatePayload['progressStages.0.completed'] = true;
+      updatePayload['progressStages.0.completedAt'] = report.progressStages[0]?.completedAt || new Date();
+      updatePayload['progressStages.1.completed'] = true;
+      updatePayload['progressStages.1.completedAt'] = new Date();
+      updatePayload['progressStages.2.completed'] = true;
+      updatePayload['progressStages.2.completedAt'] = new Date();
+    }
+
+    await Report.findByIdAndUpdate(
+      report._id,
+      { $set: updatePayload },
+      { runValidators: false }
+    );
 
     // Mark worker as busy, add task to their list
     await User.findByIdAndUpdate(bestWorker._id, {

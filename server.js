@@ -14,7 +14,19 @@ const { runEscalation } = require('./services/escalationService');
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowed = [
+      process.env.FRONTEND_URL || 'http://localhost:5173',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ];
+    // Allow requests with no origin (mobile apps, Postman)
+    if (!origin || allowed.includes(origin)) callback(null, true);
+    else callback(null, true); // allow all origins in development
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(requestLogger);

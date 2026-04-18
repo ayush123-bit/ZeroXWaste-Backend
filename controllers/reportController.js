@@ -83,10 +83,11 @@ const createReport = async (req, res) => {
           broadcast({ type: 'NEW_HIGH_PRIORITY', title: 'New High Priority Report', message: `${category} waste reported near ${address || 'unknown location'}`, reportId: report._id, score: priorityResult.priorityScore });
         }
 
-        // ── Auto-assign nearest available worker ──────────────────────────
+     
         try {
+       
           const freshReport = await Report.findById(report._id);
-          if (freshReport && freshReport.status === 'pending') {
+          if (freshReport && !freshReport.assignedWorker?.workerId) {
             await autoAssignWorker(freshReport);
           }
         } catch (assignErr) {

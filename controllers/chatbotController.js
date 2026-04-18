@@ -1,6 +1,9 @@
 const Groq = require('groq-sdk');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const jwt    = require('jsonwebtoken');
+const Report = require('../models/Report');
+const User   = require('../models/User');
 
 // ── System prompt with full platform knowledge ────────────────────────────────
 const SYSTEM_PROMPT = `You are EcoBot, the friendly and intelligent AI assistant for ZeroX Waste — a Smart Waste Management Platform that helps citizens report, track, and resolve waste complaints in their cities.
@@ -126,6 +129,58 @@ const callGroqWithRetry = async (messages, retries = 2) => {
   }
 };
 
+
+const getUserContext = async (req) => {
+  try {
+    const token = req.cookies?.ZeroXtoken;
+    if (!token) return null;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId  = decoded.userId;
+    if (!userId) return null;
+
+    const [user, reports] = await Promise.all([
+      User.findById(userId).select('name email points badges totalReports role').lean(),
+      Report.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('description category status priorityLevel priorityScore createdAt location')
+        .lean(),
+    ]);
+
+    if (!user) return null;
+
+    const total    = reports.length;
+    const pending  = reports.filter(r => r.status === 'pending').length;
+    const resolved = reports.filter(r => r.status === 'resolved').length;
+    const inProg   = reports.filter(r => r.status === 'in-progress').length;
+    const highPri  = reports.filter(r => r.priorityLevel === 'High').length;
+
+    const recentList = reports.slice(0, 3).map((r, i) =>
+      `${i+1}. ${r.category} waste — ${r.status} — Priority: ${r.priorityLevel || 'Pending'} (Score: ${r.priorityScore || 'N/A'}) — "${r.description?.slice(0,50)}" — at ${r.location?.address || 'unknown location'} — reported on ${new Date(r.createdAt).toLocaleDateString('en-IN')}`
+    ).join('\n');
+
+    return `
+## CURRENT USER PERSONAL DATA (use this to answer personal questions)
+- Name: ${user.name}
+- Email: ${user.email}
+- Role: ${user.role}
+- Points: ${user.points || 0}
+- Badges earned: ${user.badges?.length > 0 ? user.badges.join(', ') : 'None yet'}
+- Total reports submitted: ${total}
+- Pending reports: ${pending}
+- In-progress reports: ${inProg}
+- Resolved reports: ${resolved}
+- High priority reports: ${highPri}
+- Recent complaints:
+${recentList || 'No complaints yet'}
+
+Use this data to answer personal questions like "how many reports do I have", "what is the status of my complaint", "what are my points", etc. If the user asks about a specific complaint and you can identify it from the list above, give them the exact details.`;
+  } catch {
+    return null;
+  }
+};
+
+
 // ── POST /api/chatbot/message ─────────────────────────────────────────────────
 const sendMessage = async (req, res) => {
   try {
@@ -181,9 +236,16 @@ const sendMessage = async (req, res) => {
       };
     }
 
+  // ── Fetch personal user context (enables DB-aware personal answers) ───
+    const userContext = await getUserContext(req);
+
+    const systemContent = userContext
+      ? `${SYSTEM_PROMPT}\n\n${userContext}`
+      : SYSTEM_PROMPT;
+
     // ── Call Groq with retry logic ────────────────────────────────────────
     const finalMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemContent },
       ...sanitized,
     ];
 
