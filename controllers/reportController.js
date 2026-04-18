@@ -8,6 +8,8 @@ const { broadcast } = require('../services/notificationService');
 const { invalidatePattern, get, set } = require('../services/cacheService');
 const { logger } = require('../middlewares/logger');
 const jwt = require('jsonwebtoken');
+const { autoAssignWorker } = require('../services/autoWorkerService');
+const { validateWasteImage } = require('../services/imageValidationService');
 
 const extractUser = (req) => {
   try {
@@ -27,6 +29,25 @@ const createReport = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Upload at least one image' });
     }
     const uploadedImages = await Promise.all(req.files.map((f) => uploadToCloudinary(f.buffer, f.originalname)));
+
+    // ── Validate first image is actually showing waste ─────────────────────
+    try {
+      const validation = await validateWasteImage(uploadedImages[0]?.url, 'complaint');
+      if (!validation.valid && validation.confidence > 70) {
+        // Delete uploaded images since we're rejecting
+        await Promise.all(uploadedImages.map(img =>
+          require('../config/cloudinary').deleteFromCloudinary(img.publicId).catch(() => {})
+        ));
+        return res.status(400).json({
+          status:  'error',
+          message: `Image does not appear to show waste or an environmental issue. Please upload a clear photo of the waste. (${validation.reason})`,
+        });
+      }
+    } catch (validErr) {
+      console.error('[ImageValidation] Skipped for complaint:', validErr.message);
+      // Never block submission due to validation failure
+    }
+
     const user = extractUser(req);
     const report = await Report.create({
       description, category: category.toLowerCase(),
@@ -54,13 +75,24 @@ const createReport = async (req, res) => {
   wasteClassification: classificationResult.data,
   recommendations: recommendationResult.data,
 }, { runValidators: false }); // ← add this
-        if (user?.userId) {
+       if (user?.userId) {
           await awardPoints(user.userId, 'SUBMIT_REPORT');
           if (priorityResult.priorityLevel === 'High') await awardPoints(user.userId, 'HIGH_PRIORITY_REPORT');
         }
         if (priorityResult.priorityLevel === 'High') {
           broadcast({ type: 'NEW_HIGH_PRIORITY', title: 'New High Priority Report', message: `${category} waste reported near ${address || 'unknown location'}`, reportId: report._id, score: priorityResult.priorityScore });
         }
+
+        // ── Auto-assign nearest available worker ──────────────────────────
+        try {
+          const freshReport = await Report.findById(report._id);
+          if (freshReport && freshReport.status === 'pending') {
+            await autoAssignWorker(freshReport);
+          }
+        } catch (assignErr) {
+          console.error('[AutoAssign] Skipped:', assignErr.message);
+        }
+
         invalidatePattern('stats:');
        logger.info('Background processing complete', { reportId: report._id, priority: priorityResult.priorityLevel, score: priorityResult.priorityScore, breakdown: priorityResult.breakdown });
       } catch (err) {
@@ -380,4 +412,3 @@ const updateReportProgress = async (req, res) => {
 // Update module.exports to include updateReportProgress
 module.exports = { createReport, getAllReports, getMyReports, getReportById, getNearbyReports, getHeatmapData, updateReportStatus, updateReportProgress, assignWorker, deleteReport, getReportStats };
 
-module.exports = { createReport, getAllReports, getMyReports, getReportById, getNearbyReports, getHeatmapData, updateReportStatus, assignWorker, deleteReport, getReportStats, updateReportProgress };

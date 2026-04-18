@@ -414,4 +414,109 @@ const sendResolutionEmail = async ({ to, name, report, proofUrl }) => {
   }
 };
 
-module.exports = { sendCampaignEmail, sendCampaignEmailBatch, sendResolutionEmail };
+/**
+ * Send task assignment email to worker
+ */
+const sendWorkerAssignmentEmail = async ({ to, workerName, report }) => {
+  try {
+    const transporter = createTransporter();
+    if (!transporter) return false;
+
+    const reportDate = new Date(report.createdAt).toLocaleString('en-IN', {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata',
+    });
+
+    const mailOptions = {
+      from: `"ZeroX Waste" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: `🧹 New Cleanup Task Assigned — ${report.category} Waste`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f0fdf4;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#1a6b45 0%,#276749 50%,#2c7a7b 100%);padding:36px 40px;text-align:center;">
+            <p style="margin:0;font-size:40px;">🧹</p>
+            <h1 style="margin:12px 0 4px;color:#fff;font-size:24px;font-weight:800;">New Task Assigned!</h1>
+            <p style="margin:0;color:rgba(255,255,255,0.8);font-size:13px;">ZeroX Waste Worker Portal</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 20px;font-size:16px;color:#374151;">Hi <strong>${workerName}</strong> 👋</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.7;">
+              A new waste cleanup task has been assigned to you. Please review the details below and proceed to the location as soon as possible.
+            </p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:24px;margin-bottom:24px;">
+              <h2 style="margin:0 0 16px;color:#166534;font-size:18px;">Task Details</h2>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:6px 0;width:120px;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Category</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:#111827;text-transform:capitalize;font-weight:600;">${report.category} Waste</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Priority</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:${report.priorityLevel === 'High' ? '#dc2626' : report.priorityLevel === 'Medium' ? '#d97706' : '#16a34a'};font-weight:700;">${report.priorityLevel || 'Pending Analysis'} ${report.priorityScore ? `(${report.priorityScore}/100)` : ''}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Location</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:#111827;">${report.location?.address || 'GPS coordinates provided below'}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">GPS</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:#2563eb;">${report.location?.coordinates?.[1]?.toFixed(6) || 'N/A'}, ${report.location?.coordinates?.[0]?.toFixed(6) || 'N/A'}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Reported On</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:#111827;">${reportDate}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;vertical-align:top;"><span style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Description</span></td>
+                  <td style="padding:6px 0;"><span style="font-size:14px;color:#374151;line-height:1.6;">${report.description}</span></td>
+                </tr>
+              </table>
+            </div>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+              <p style="margin:0;font-size:13px;color:#92400e;font-weight:600;">⚠️ Important Instructions:</p>
+              <ul style="margin:8px 0 0 0;padding-left:20px;color:#78350f;font-size:13px;line-height:1.8;">
+                <li>Reach the location as soon as possible</li>
+                <li>Take a clear photo of the area BEFORE cleaning</li>
+                <li>After cleanup, upload proof photo via Worker Portal</li>
+                <li>Your GPS must be within 500m of the complaint location</li>
+              </ul>
+            </div>
+            <div style="text-align:center;margin:24px 0;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/worker-portal"
+                 style="display:inline-block;background:linear-gradient(135deg,#1a6b45,#2c7a7b);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:50px;">
+                Open Worker Portal →
+              </a>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} ZeroX Waste Management Platform</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Worker assignment email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error(`[Email] Worker assignment email failed to ${to}:`, error.message);
+    return false;
+  }
+};
+
+module.exports = { sendCampaignEmail, sendCampaignEmailBatch, sendResolutionEmail, sendWorkerAssignmentEmail };

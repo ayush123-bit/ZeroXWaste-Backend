@@ -10,6 +10,7 @@ const { apiLimiter } = require('./middlewares/rateLimiter');
 const { runEscalation } = require('./services/escalationService');
 
 
+
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -29,6 +30,7 @@ app.use('/api/chatbot',  require('./routes/chatbotRoutes'));
 app.use('/api/campaigns', require('./routes/campaignRoutes')); 
 app.use('/api/sub-admin',  require('./routes/subAdminRoutes'));
 app.use('/api/workers-portal', require('./routes/workerPortalRoutes'));
+app.use('/api/analytics',    require('./routes/analyticsRoutes'));
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));

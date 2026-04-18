@@ -4,6 +4,7 @@ const Report   = require('../models/Report');
 const User     = require('../models/User');
 const upload   = require('../middlewares/upload');
 const { sendToUser } = require('../services/notificationService');
+const { validateWasteImage } = require('../services/imageValidationService');
 const jwt      = require('jsonwebtoken');
 
 const extractWorker = (req) => {
@@ -86,7 +87,24 @@ router.post('/submit-proof/:reportId', upload.single('proof'), async (req, res) 
 
     // Upload to Cloudinary
     const { uploadToCloudinary } = require('../config/cloudinary');
-    const proofImage = await uploadToCloudinary(req.file.buffer, `proof_${req.params.reportId}`);
+   const proofImage = await uploadToCloudinary(req.file.buffer, `proof_${req.params.reportId}`);
+
+    // ── Validate proof image actually shows a cleaned area ─────────────────
+    try {
+      const proofValidation = await validateWasteImage(proofImage.url, 'proof');
+      if (!proofValidation.valid && proofValidation.confidence > 75) {
+        // Delete the uploaded fake proof
+        const { deleteFromCloudinary } = require('../config/cloudinary');
+        await deleteFromCloudinary(proofImage.publicId).catch(() => {});
+        return res.status(400).json({
+          status:  'error',
+          message: `Proof image does not appear to show a cleaned area. Please upload a clear photo of the cleaned location. (${proofValidation.reason})`,
+        });
+      }
+    } catch (validErr) {
+      console.error('[ProofValidation] Skipped:', validErr.message);
+      // Never block proof submission due to validation failure
+    }
 
     // Haversine distance calculation
     const reportLat = report.location.coordinates[1];
