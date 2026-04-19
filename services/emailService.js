@@ -217,7 +217,7 @@ const sendCampaignEmail = async ({ to, name, campaign }) => {
                       <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;" class="btn-table">
                         <tr>
                           <td align="center" style="background:#0B2B1F;border-radius:60px;padding:0;">
-                            <a href="#" style="display:inline-block;background:#0B2B1F;color:#FFFFFF;font-size:16px;font-weight:500;text-decoration:none;padding:15px 44px;border-radius:60px;letter-spacing:0.2px;border:1px solid #2C5F48;transition:all 0.2s ease;font-family:'Inter',Arial,sans-serif;">Confirm attendance →</a>
+                            <a href="https://green-mind-loqs.vercel.app/campaigns" style="display:inline-block;background:#0B2B1F;color:#FFFFFF;font-size:16px;font-weight:500;text-decoration:none;padding:15px 44px;border-radius:60px;letter-spacing:0.2px;border:1px solid #2C5F48;font-family:'Inter',Arial,sans-serif;">Confirm attendance →</a>
                           </td>
                         </tr>
                        </>
@@ -383,7 +383,7 @@ const sendResolutionEmail = async ({ to, name, report, proofUrl }) => {
               <img src="${proofUrl}" alt="Cleaned area" style="width:100%;max-width:480px;border-radius:12px;border:2px solid #bbf7d0;"/>
             </div>` : ''}
             <div style="text-align:center;margin:28px 0;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/myreports" 
+             <a href="https://green-mind-loqs.vercel.app/myreports" 
                  style="display:inline-block;background:linear-gradient(135deg,#166534,#16a34a);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:50px;letter-spacing:0.3px;">
                 View Resolved Complaint →
               </a>
@@ -491,7 +491,7 @@ const sendWorkerAssignmentEmail = async ({ to, workerName, report }) => {
               </ul>
             </div>
             <div style="text-align:center;margin:24px 0;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/worker-portal"
+              <a href="https://green-mind-loqs.vercel.app/worker-portal"
                  style="display:inline-block;background:linear-gradient(135deg,#1a6b45,#2c7a7b);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:50px;">
                 Open Worker Portal →
               </a>
