@@ -20,6 +20,7 @@ app.use(cors({
       process.env.FRONTEND_URL || 'http://localhost:5173',
       'http://localhost:5173',
       'http://localhost:3000',
+      "https://green-mind-loqs.vercel.app"
     ];
     // Allow requests with no origin (mobile apps, Postman)
     if (!origin || allowed.includes(origin)) callback(null, true);
