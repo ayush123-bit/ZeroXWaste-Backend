@@ -47,6 +47,13 @@ const assignWorkerToReport = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'User is not a worker' });
     }
 
+    // ── Check if report already has a different worker assigned ──────────
+    const existingReport = await Report.findById(req.params.reportId);
+    if (!existingReport) return res.status(404).json({ status: 'error', message: 'Report not found' });
+
+    const previousWorkerId   = existingReport.assignedWorker?.workerId;
+    const previousWorkerName = existingReport.assignedWorker?.workerName;
+
     const report = await Report.findByIdAndUpdate(
       req.params.reportId,
       {
@@ -55,24 +62,64 @@ const assignWorkerToReport = async (req, res) => {
       },
       { new: true, runValidators: false }
     );
-    if (!report) return res.status(404).json({ status: 'error', message: 'Report not found' });
+
+    // If a different worker was previously assigned, free them and notify them
+    if (previousWorkerId && previousWorkerId !== workerId) {
+      await User.findByIdAndUpdate(previousWorkerId, {
+        $pull: { 'workerProfile.assignedTasks': report._id },
+        'workerProfile.isAvailable': true,
+      });
+
+      // In-app notification to old worker
+      sendToUser(previousWorkerId, {
+        type:    'TASK_REASSIGNED',
+        title:   '⚠️ Task reassigned',
+        message: `Your task for ${report.category} waste at ${report.location?.address || 'reported location'} has been reassigned to another worker.`,
+        reportId: report._id,
+      });
+
+      // Email to old worker
+      const oldWorker = await User.findById(previousWorkerId).select('name email');
+      if (oldWorker?.email) {
+        const { sendWorkerReassignmentEmail } = require('../services/emailService');
+        sendWorkerReassignmentEmail({
+          to:         oldWorker.email,
+          workerName: oldWorker.name,
+          report,
+          isReassignedAway: true,
+          newWorkerName: worker.name,
+        }).catch(e => console.error('[Email] Reassignment notify failed:', e.message));
+      }
+    }
 
     await User.findByIdAndUpdate(workerId, {
       $addToSet: { 'workerProfile.assignedTasks': report._id },
       'workerProfile.isAvailable': false,
     });
 
+    // In-app notification to new worker
     sendToUser(workerId, {
       type:    'TASK_ASSIGNED',
-      title:   'New task assigned to you',
-      message: `You have been assigned a ${report.category} waste report`,
+      title:   '🧹 New task assigned to you',
+      message: `You have been assigned a ${report.category} waste report at ${report.location?.address || 'reported location'}`,
       reportId: report._id,
     });
 
+    // Email to new worker
+    if (worker.email) {
+      const { sendWorkerAssignmentEmail } = require('../services/emailService');
+      sendWorkerAssignmentEmail({
+        to:         worker.email,
+        workerName: worker.name,
+        report,
+      }).catch(e => console.error('[Email] Worker assignment email failed:', e.message));
+    }
+
+    // In-app notification to reporter
     if (report.userId) {
       sendToUser(report.userId, {
         type:    'STATUS_UPDATE',
-        title:   'Worker assigned to your report',
+        title:   '👷 Worker assigned to your report',
         message: `${worker.name} has been assigned to handle your complaint`,
         reportId: report._id,
       });

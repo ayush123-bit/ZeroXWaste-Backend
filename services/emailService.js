@@ -519,4 +519,87 @@ const sendWorkerAssignmentEmail = async ({ to, workerName, report }) => {
   }
 };
 
-module.exports = { sendCampaignEmail, sendCampaignEmailBatch, sendResolutionEmail, sendWorkerAssignmentEmail };
+/**
+ * Notify a worker that their task was reassigned away from them
+ */
+const sendWorkerReassignmentEmail = async ({ to, workerName, report, newWorkerName }) => {
+  try {
+    const transporter = createTransporter();
+    if (!transporter) return false;
+
+    const mailOptions = {
+      from: `"ZeroX Waste" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: `⚠️ Task Reassigned — ${report.category} Waste`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#fefce8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#92400e,#d97706);padding:36px 40px;text-align:center;">
+            <p style="margin:0;font-size:40px;">⚠️</p>
+            <h1 style="margin:12px 0 4px;color:#fff;font-size:22px;font-weight:800;">Task Reassigned</h1>
+            <p style="margin:0;color:rgba(255,255,255,0.85);font-size:13px;">ZeroX Waste Worker Portal</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#374151;">Hi <strong>${workerName}</strong>,</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.7;">
+              The following task has been <strong style="color:#d97706;">reassigned</strong> to another worker by the administrator.
+              You are no longer responsible for this complaint.
+            </p>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:5px 0;width:120px;"><span style="font-size:12px;color:#92400e;font-weight:600;text-transform:uppercase;">Category</span></td>
+                  <td style="padding:5px 0;"><span style="font-size:14px;color:#111827;text-transform:capitalize;font-weight:600;">${report.category} Waste</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:5px 0;"><span style="font-size:12px;color:#92400e;font-weight:600;text-transform:uppercase;">Location</span></td>
+                  <td style="padding:5px 0;"><span style="font-size:14px;color:#374151;">${report.location?.address || 'Reported location'}</span></td>
+                </tr>
+                <tr>
+                  <td style="padding:5px 0;"><span style="font-size:12px;color:#92400e;font-weight:600;text-transform:uppercase;">Reassigned To</span></td>
+                  <td style="padding:5px 0;"><span style="font-size:14px;color:#374151;font-weight:600;">${newWorkerName}</span></td>
+                </tr>
+              </table>
+            </div>
+            <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;">
+              Your availability has been updated. You may now receive new task assignments.
+              Check your portal for your current tasks.
+            </p>
+            <div style="text-align:center;margin:24px 0;">
+              <a href="https://green-mind-loqs.vercel.app/worker-portal"
+                 style="display:inline-block;background:linear-gradient(135deg,#92400e,#d97706);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:50px;">
+                View My Tasks →
+              </a>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} ZeroX Waste Management Platform</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Reassignment notice sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error(`[Email] Reassignment email failed to ${to}:`, error.message);
+    return false;
+  }
+};
+
+module.exports = { sendCampaignEmail, sendCampaignEmailBatch, sendResolutionEmail, sendWorkerAssignmentEmail, sendWorkerReassignmentEmail };
